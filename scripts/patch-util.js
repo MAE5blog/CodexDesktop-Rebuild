@@ -34,9 +34,10 @@ function locateBundles({ dir, pattern, platform }) {
   const getDir = dirMap[dir];
   if (!getDir) throw new Error(`Unknown dir type: ${dir}`);
 
+  const ALL_PLATFORMS = ["mac-arm64", "mac-x64", "win"];
   const platforms = platform
     ? [platform]
-    : ["unix", "win"].filter((p) => fs.existsSync(getDir(p)));
+    : ALL_PLATFORMS.filter((p) => fs.existsSync(getDir(p)));
 
   // Legacy fallback
   if (platforms.length === 0) {

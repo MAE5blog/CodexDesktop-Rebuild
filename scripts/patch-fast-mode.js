@@ -174,13 +174,13 @@ function findAndPatchAuthFunc(ast, source, funcName, patches) {
 function main() {
   const args = process.argv.slice(2);
   const isCheck = args.includes("--check");
-  const platform = args.find((a) => a === "unix" || a === "win");
+  const platform = args.find((a) => ["mac-arm64", "mac-x64", "win"].includes(a));
 
   // Scan JS chunks for fast_mode gate logic (chunk name varies across versions)
   const { SRC_DIR } = require("./patch-util");
   const platforms = platform
     ? [platform]
-    : ["unix", "win"].filter((p) =>
+    : ["mac-arm64", "mac-x64", "win"].filter((p) =>
         fs.existsSync(path.join(SRC_DIR, p, "webview", "assets"))
       );
 

@@ -2,66 +2,6 @@ const { FuseV1Options, FuseVersion } = require("@electron/fuses");
 const path = require("path");
 const fs = require("fs");
 
-// 平台架构 -> @cometix/codex target triple 映射
-const TARGET_TRIPLE_MAP = {
-  "darwin-arm64": "aarch64-apple-darwin",
-  "darwin-x64": "x86_64-apple-darwin",
-  "linux-arm64": "aarch64-unknown-linux-musl",
-  "linux-x64": "x86_64-unknown-linux-musl",
-  "win32-x64": "x86_64-pc-windows-msvc",
-};
-
-// 获取 @cometix/codex vendor 目录下的二进制路径
-function getVendorBinaryPath(platform, arch, subdir, binaryName) {
-  const platformArch = `${platform}-${arch}`;
-  const targetTriple = TARGET_TRIPLE_MAP[platformArch];
-  if (!targetTriple) return null;
-
-  const vendorPath = path.join(
-    __dirname, "node_modules", "@cometix", "codex", "vendor",
-    targetTriple, subdir, binaryName
-  );
-  return fs.existsSync(vendorPath) ? vendorPath : null;
-}
-
-// 从 npm vendor 复制二进制到 resources/bin/（确保本地始终为最新）
-function syncVendorToLocal(platform, arch) {
-  const platformArch = `${platform}-${arch}`;
-  const binaryName = platform === "win32" ? "codex.exe" : "codex";
-  const vendorPath = getVendorBinaryPath(platform, arch, "codex", binaryName);
-  if (!vendorPath) return;
-
-  const localDir = path.join(__dirname, "resources", "bin", platformArch);
-  fs.mkdirSync(localDir, { recursive: true });
-  fs.copyFileSync(vendorPath, path.join(localDir, binaryName));
-  fs.chmodSync(path.join(localDir, binaryName), 0o755);
-  console.log(`🔄 Synced codex binary: vendor → resources/bin/${platformArch}/${binaryName}`);
-}
-
-// 获取 codex 二进制路径（resources/bin 为主，npm vendor 为回退）
-function getCodexBinaryPath(platform, arch) {
-  const platformArch = `${platform}-${arch}`;
-  const binaryName = platform === "win32" ? "codex.exe" : "codex";
-
-  // 先从 npm vendor 同步到 resources/bin/
-  syncVendorToLocal(platform, arch);
-
-  // 路径1: 本地 resources/bin/
-  const localPath = path.join(__dirname, "resources", "bin", platformArch, binaryName);
-  if (fs.existsSync(localPath)) {
-    return localPath;
-  }
-
-  // 路径2: npm @cometix/codex/vendor/（直接回退）
-  return getVendorBinaryPath(platform, arch, "codex", binaryName);
-}
-
-// 获取 rg (ripgrep) 二进制路径
-function getRgBinaryPath(platform, arch) {
-  const binaryName = platform === "win32" ? "rg.exe" : "rg";
-  return getVendorBinaryPath(platform, arch, "path", binaryName);
-}
-
 module.exports = {
   packagerConfig: {
     name: "Codex",
@@ -523,56 +463,48 @@ module.exports = {
       );
     },
 
-    // 打包后复制对应平台的 codex + rg 二进制
+    // Copy all extra resources from src/ (binaries, plugins, native, etc.)
+    // prepare-src.js already placed everything into src/ — just copy non-ASAR files
     packageAfterCopy: async (config, buildPath, electronVersion, platform, arch) => {
-      console.log(`\n📦 Packaging for ${platform}-${arch}...`);
+      console.log(`\n-- packageAfterCopy: ${platform}-${arch}`);
       console.log(`   buildPath: ${buildPath}`);
 
-      // buildPath 指向 app 目录，其父目录即为 Resources (macOS) 或 resources (其他)
       const resourcesPath = path.dirname(buildPath);
+      const srcDir = path.join(__dirname, "src");
 
-      // --- 复制 codex 二进制 ---
-      const codexBinaryName = platform === "win32" ? "codex.exe" : "codex";
-      const codexSrc = getCodexBinaryPath(platform, arch);
-      const codexDest = path.join(resourcesPath, codexBinaryName);
+      // Files/dirs that are part of ASAR (already in buildPath via forge)
+      const asarContent = new Set([
+        ".vite", "webview", "skills", "node_modules", "package.json",
+      ]);
 
-      if (codexSrc && fs.existsSync(codexSrc)) {
-        fs.copyFileSync(codexSrc, codexDest);
-        fs.chmodSync(codexDest, 0o755);
-        console.log(`✅ Copied codex binary: ${codexSrc} -> ${codexDest}`);
-      } else {
-        console.error(`❌ Codex binary not found for ${platform}-${arch}`);
-        console.error(`   Tried: resources/bin/${platform}-${arch}/${codexBinaryName}`);
-        console.error(`   Tried: node_modules/@cometix/codex/vendor/.../codex/${codexBinaryName}`);
-        process.exit(1);
-      }
+      let copied = 0;
+      for (const entry of fs.readdirSync(srcDir, { withFileTypes: true })) {
+        // Skip ASAR content (already packed), platform source dirs, hidden files
+        if (asarContent.has(entry.name)) continue;
+        if (["mac-arm64", "mac-x64", "win", "unix"].includes(entry.name)) continue;
+        if (entry.name.startsWith(".")) continue;
 
-      // --- 复制 Windows 附属二进制（sandbox-setup, command-runner）---
-      if (platform === "win32") {
-        const winExtras = ["codex-command-runner.exe", "codex-windows-sandbox-setup.exe"];
-        for (const extra of winExtras) {
-          const extraSrc = getVendorBinaryPath(platform, arch, "codex", extra);
-          if (extraSrc) {
-            const extraDest = path.join(resourcesPath, extra);
-            fs.copyFileSync(extraSrc, extraDest);
-            fs.chmodSync(extraDest, 0o755);
-            console.log(`✅ Copied ${extra}: ${extraSrc} -> ${extraDest}`);
-          }
+        const srcPath = path.join(srcDir, entry.name);
+        const destPath = path.join(resourcesPath, entry.name);
+
+        if (entry.isDirectory()) {
+          const copyDir = (s, d) => {
+            fs.mkdirSync(d, { recursive: true });
+            for (const e of fs.readdirSync(s, { withFileTypes: true })) {
+              const sp = path.join(s, e.name), dp = path.join(d, e.name);
+              if (e.isDirectory()) copyDir(sp, dp);
+              else if (!e.isSymbolicLink()) { fs.copyFileSync(sp, dp); copied++; }
+            }
+          };
+          copyDir(srcPath, destPath);
+        } else if (!entry.isSymbolicLink()) {
+          fs.copyFileSync(srcPath, destPath);
+          try { fs.chmodSync(destPath, 0o755); } catch {}
+          copied++;
         }
       }
 
-      // --- 复制 rg (ripgrep) 二进制 ---
-      const rgBinaryName = platform === "win32" ? "rg.exe" : "rg";
-      const rgSrc = getRgBinaryPath(platform, arch);
-      const rgDest = path.join(resourcesPath, rgBinaryName);
-
-      if (rgSrc) {
-        fs.copyFileSync(rgSrc, rgDest);
-        fs.chmodSync(rgDest, 0o755);
-        console.log(`✅ Copied rg binary: ${rgSrc} -> ${rgDest}`);
-      } else {
-        console.warn(`⚠️  rg binary not found for ${platform}-${arch}, skipping`);
-      }
+      console.log(`   [ok] ${copied} extra resources copied to app`);
     },
   },
 };
