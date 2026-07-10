@@ -13,7 +13,6 @@ src/
 src/.build-mode
 
 # Version check state (local only)
-scripts/.versions.json
 
 # Logs
 *.log
