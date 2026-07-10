@@ -2,7 +2,7 @@
   "name": "codex-rebuild",
   "productName": "Codex",
   "version": "26.707.31428",
-  "description": "Codex Electron App - Cross-platform Build",
+  "description": "MAE5 Codex Desktop Rebuild for Windows x64 and Linux ARM64",
   "main": "src/.vite/build/bootstrap.js",
   "scripts": {
     "start": "node scripts/start-dev.js",

@@ -1,94 +1,83 @@
-name: Build & Release (Manual)
+name: Build MAE5 Targets (Manual)
 
 on:
   workflow_dispatch:
     inputs:
-      platform:
-        description: "Target platform"
+      target:
+        description: "Target distribution"
         required: false
         default: "all"
         type: choice
-        options: [all, mac, windows, linux]
+        options: [all, windows-x64, linux-arm64]
 
 env:
   NODE_VERSION: "24"
 
+permissions:
+  contents: read
+
 jobs:
-  build-mac:
-    if: inputs.platform == 'all' || inputs.platform == 'mac'
-    runs-on: macos-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        arch: [x64, arm64]
-    steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-node@v6
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: npm
-      - run: |
-          npm ci
-      - run: |
-          brew install --quiet sevenzip
-      - run: node scripts/sync-upstream.js --force --skip-win
-      - run: node scripts/patch-all.js mac-${{ matrix.arch }}
-      - run: npm run build:mac-${{ matrix.arch }}
-      - uses: actions/upload-artifact@v7
-        with:
-          name: Codex-macOS-${{ matrix.arch }}
-          path: out/*.dmg
-
-  build-windows:
-    if: inputs.platform == 'all' || inputs.platform == 'windows'
+  build-windows-x64:
+    if: inputs.target == 'all' || inputs.target == 'windows-x64'
     runs-on: windows-latest
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-node@v6
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
-      - run: |
-          npm ci
-      - run: |
-          choco install 7zip -y
+      - name: Install dependencies
+        run: npm ci
+      - name: Install 7-Zip
+        run: choco install 7zip -y
       - name: Add 7zz alias
+        shell: pwsh
         run: |
-          Copy-Item "C:\Program Files\7-Zip\7z.exe" "C:\Program Files\7-Zip\7zz.exe"
-          echo "C:\Program Files\7-Zip" | Out-File -Append -Encoding utf8 $env:GITHUB_PATH
-      - run: node scripts/sync-upstream.js --force --skip-mac
-      - run: node scripts/patch-all.js win
-      - run: npm run build:win-x64
+          Copy-Item "C:\Program Files\7-Zip\7z.exe" "C:\Program Files\7-Zip\7zz.exe" -Force
+          "C:\Program Files\7-Zip" | Out-File -Append -Encoding utf8 $env:GITHUB_PATH
+      - name: Sync Windows upstream package
+        run: node scripts/sync-upstream.js --force --skip-mac
+      - name: Apply Windows patches
+        run: node scripts/patch-all.js win
+      - name: Build Windows x64
+        run: npm run build:win-x64
       - uses: actions/upload-artifact@v7
         with:
-          name: Codex-Windows-x64
+          name: Codex-MAE5-Windows-x64
           path: out/*.zip
+          if-no-files-found: error
 
-  build-linux:
-    if: inputs.platform == 'all' || inputs.platform == 'linux'
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        arch: [x64, arm64]
+  build-linux-arm64:
+    if: inputs.target == 'all' || inputs.target == 'linux-arm64'
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 120
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-node@v6
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
-      - run: |
-          npm ci
-      - run: |
+      - name: Install system dependencies
+        run: |
           sudo apt-get update
           sudo apt-get install -y rpm fakeroot dpkg 7zip
-      - run: node scripts/sync-upstream.js --force --skip-win
-      - run: node scripts/patch-all.js mac-${{ matrix.arch }}
-      - run: npm run build:linux-${{ matrix.arch }}
+          if ! command -v 7zz >/dev/null 2>&1 && command -v 7z >/dev/null 2>&1; then
+            sudo ln -sf "$(command -v 7z)" /usr/local/bin/7zz
+          fi
+      - name: Install dependencies
+        run: npm ci
+      - name: Sync macOS ARM64 upstream package for Linux
+        run: node scripts/sync-upstream.js --force --skip-win
+      - name: Apply ARM64 source patches
+        run: node scripts/patch-all.js mac-arm64
+      - name: Build Linux ARM64 natively
+        run: npm run build:linux-arm64
       - uses: actions/upload-artifact@v7
         with:
-          name: Codex-Linux-${{ matrix.arch }}
+          name: Codex-MAE5-Linux-arm64
           path: |
             out/make/deb/**/*.deb
             out/make/rpm/**/*.rpm
             out/make/zip/**/*.zip
+          if-no-files-found: error

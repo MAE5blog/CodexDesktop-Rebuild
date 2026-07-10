@@ -1,71 +1,64 @@
-# Codex Desktop Rebuild
+# Codex Desktop Rebuild - MAE5 Fork
 
-Cross-platform Electron build for OpenAI Codex Desktop App.
+This fork tracks [Haleclipse/CodexDesktop-Rebuild](https://github.com/Haleclipse/CodexDesktop-Rebuild) and maintains two production targets for our own environment.
 
-## Supported Platforms
+## Supported Distributions
 
-| Platform | Architecture | Status |
-|----------|--------------|--------|
-| macOS    | x64, arm64   | ✅     |
-| Windows  | x64          | ✅     |
-| Linux    | x64, arm64   | ✅     |
+| Platform | Architecture | Build environment | Status |
+|----------|--------------|-------------------|--------|
+| Windows | x64 | GitHub-hosted Windows runner and local Windows validation | Primary |
+| Linux | ARM64 | Native GitHub ARM64 runner and Oracle Seoul ARM64 validation | Primary |
+
+macOS and Linux x64 code remains available for upstream compatibility, but this fork does not publish or validate those distributions.
+
+## Fork Goals
+
+- Keep CPA/custom API provider support without embedding credentials.
+- Preserve GPT-5.6 model visibility and all supported reasoning efforts.
+- Keep Fast mode available while Standard remains the default.
+- Keep plugin marketplace search and GitHub plugin visibility working.
+- Preserve Browser, Chrome extension, and Computer Use integrations.
+- Keep Windows session history compatible with the official Codex App data directory.
+- Keep Linux ARM64 window controls and Chinese input methods working.
+- Produce reproducible Windows x64 and Linux ARM64 release artifacts.
+
+The detailed acceptance matrix and upstream policy are in [docs/TARGETS.md](docs/TARGETS.md).
 
 ## Build
 
-```bash
-# Install dependencies
-npm install
-
-# Build for current platform
-npm run build
-
-# Build for specific platform
-npm run build:mac-x64
-npm run build:mac-arm64
+```powershell
+# Windows x64
+npm ci
+node scripts/sync-upstream.js --force --skip-mac
+node scripts/patch-all.js win
 npm run build:win-x64
-npm run build:linux-x64
-npm run build:linux-arm64
-
-# Build all platforms
-npm run build:all
 ```
-
-## Development
 
 ```bash
-npm run dev
+# Linux ARM64, run on an ARM64 host
+npm ci
+node scripts/sync-upstream.js --force --skip-win
+node scripts/patch-all.js mac-arm64
+npm run build:linux-arm64
 ```
 
-## Project Structure
+Manual and scheduled GitHub Actions workflows build only these two targets.
 
-```
-├── src/
-│   ├── .vite/build/     # Main process (Electron)
-│   └── webview/         # Renderer (Frontend)
-├── resources/
-│   ├── electron.icns    # App icon
-│   └── notification.wav # Sound
-├── scripts/
-│   └── patch-copyright.js
-├── forge.config.js      # Electron Forge config
-└── package.json
+## Upstream Development
+
+```bash
+git fetch upstream
+git merge upstream/master
 ```
 
-## CI/CD
-
-GitHub Actions automatically builds on:
-- Push to `master`
-- Tag `v*` → Creates draft release
+Upstream changes are merged intentionally so MAE5 patches can be reviewed and revalidated instead of being overwritten automatically.
 
 ## Credits
 
-**© OpenAI · Cometix Space**
-
-- [OpenAI Codex](https://github.com/openai/codex) - Original Codex CLI (Apache-2.0)
-- [Cometix Space](https://github.com/Haleclipse) - Cross-platform rebuild & [@cometix/codex](https://www.npmjs.com/package/@cometix/codex) binaries
-- [Electron Forge](https://www.electronforge.io/) - Build toolchain
+- [OpenAI Codex](https://github.com/openai/codex)
+- [Haleclipse/CodexDesktop-Rebuild](https://github.com/Haleclipse/CodexDesktop-Rebuild)
+- [Electron Forge](https://www.electronforge.io/)
 
 ## License
 
-This project rebuilds the Codex Desktop app for cross-platform distribution.
-Original Codex CLI by OpenAI is licensed under Apache-2.0.
+This project rebuilds the Codex Desktop app for cross-platform distribution. Original Codex CLI components remain subject to their upstream licenses.
