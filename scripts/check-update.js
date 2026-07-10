@@ -181,7 +181,7 @@ async function main() {
       const info = r.value;
       results.push(info);
       const key = info.platform;
-      const isNew = !saved[key] || saved[key].version !== info.version || saved[key].build !== info.build;
+      const isNew = !saved[key] || saved[key].version !== info.version || (saved[key].build || "") !== (info.build || "");
       if (isNew) updates.push(info);
     } else if (!quiet) {
       console.error(`  [!] ${r.reason.message}`);
@@ -228,11 +228,14 @@ async function main() {
   // 保存版本记录
   if (doSave && results.length > 0) {
     const newSaved = { ...saved };
+    const checkedAt = new Date().toISOString();
     for (const r of results) {
+      const previous = saved[r.platform];
+      const unchanged = previous && previous.version === r.version && previous.build === (r.build || undefined);
       newSaved[r.platform] = {
         version: r.version,
         build: r.build || undefined,
-        checkedAt: new Date().toISOString(),
+        checkedAt: unchanged ? previous.checkedAt : checkedAt,
       };
     }
     saveVersions(newSaved);
