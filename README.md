@@ -44,6 +44,17 @@ npm run build:linux-arm64
 
 Manual and scheduled GitHub Actions workflows build only these two targets.
 
+## Releases
+
+The scheduled sync workflow publishes a formal GitHub Release only after both production targets build successfully. Each release includes:
+
+- Windows x64 and Linux ARM64 packages.
+- `SHA256SUMS.txt` for download verification.
+- `release-manifest.json` with source versions, build commit, workflow provenance, sizes, and SHA-256 hashes.
+- A clean `mae5-v<upstream-version>` tag. Rebuilds of an already published upstream version use `-r2`, `-r3`, and later revision tags instead of replacing a published release.
+
+Manual validation builds remain available through **Build MAE5 Targets (Manual)**. To force a production release without waiting for a new upstream version, run **Sync OpenAI App & Release MAE5 Targets** with `force` enabled.
+
 ## Upstream Development
 
 ```bash
